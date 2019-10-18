@@ -2547,9 +2547,11 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 		INIT_DELAYED_WORK(&rtd->delayed_work,
 				  snd_soc_close_delayed_work);
 
-	pcm->nonatomic = rtd->dai_link->nonatomic;
 	rtd->pcm = pcm;
+	pcm->nonatomic = rtd->dai_link->nonatomic;
 	pcm->private_data = rtd;
+	pcm->private_free = soc_pcm_private_free;
+	pcm->no_device_suspend = true;
 
 	if (rtd->dai_link->no_pcm || rtd->dai_link->params) {
 		if (playback)
@@ -2602,9 +2604,6 @@ int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 		dev_err(rtd->dev, "ASoC: pcm constructor failed: %d\n", ret);
 		return ret;
 	}
-
-	pcm->private_free = soc_pcm_private_free;
-	pcm->no_device_suspend = true;
 out:
 	dev_info(rtd->card->dev, "%s <-> %s mapping ok\n",
 		 (rtd->num_codecs > 1) ? "multicodec" : asoc_codec_dai(rtd, 0)->name,

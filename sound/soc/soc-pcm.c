@@ -2451,60 +2451,64 @@ static void soc_pcm_private_free(struct snd_pcm *pcm)
 	snd_soc_pcm_component_free(pcm);
 }
 
+static void soc_get_playback_capture(struct snd_soc_pcm_runtime *rtd,
+				     int *playback, int *capture)
+{
+	if (rtd->dai_link->dynamic || rtd->dai_link->no_pcm) {
+		*playback = rtd->dai_link->dpcm_playback;
+		*capture  = rtd->dai_link->dpcm_capture;
+	} else {
+		struct snd_soc_dai *codec_dai;
+		struct snd_soc_dai *cpu_dai;
+		int stream_playback = SNDRV_PCM_STREAM_PLAYBACK;
+		int stream_capture  = SNDRV_PCM_STREAM_CAPTURE;
+		int i;
+
+		/* Adapt stream for codec2codec links */
+		if (rtd->dai_link->params) {
+			stream_playback = SNDRV_PCM_STREAM_CAPTURE;
+			stream_capture  = SNDRV_PCM_STREAM_PLAYBACK;
+		}
+
+		*playback = 1;
+		*capture  = 1;
+
+		for_each_rtd_cpu_dais(rtd, i, cpu_dai) {
+			if (!snd_soc_dai_stream_valid(cpu_dai, stream_playback))
+				*playback = 0;
+			if (!snd_soc_dai_stream_valid(cpu_dai, stream_capture))
+				*capture = 0;
+		}
+
+		for_each_rtd_codec_dais(rtd, i, codec_dai) {
+			if (!snd_soc_dai_stream_valid(codec_dai, SNDRV_PCM_STREAM_PLAYBACK))
+				*playback = 0;
+			if (!snd_soc_dai_stream_valid(codec_dai, SNDRV_PCM_STREAM_CAPTURE))
+				*capture = 0;
+		}
+	}
+
+	if (rtd->dai_link->playback_only) {
+		*playback = 1;
+		*capture = 0;
+	}
+
+	if (rtd->dai_link->capture_only) {
+		*playback = 0;
+		*capture = 1;
+	}
+}
+
 /* create a new pcm */
 int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 {
-	struct snd_soc_dai *codec_dai;
-	struct snd_soc_dai *cpu_dai;
 	struct snd_soc_component *component;
 	struct snd_pcm *pcm;
 	char new_name[64];
 	int ret = 0, playback = 0, capture = 0;
 	int i;
 
-	if (rtd->dai_link->dynamic || rtd->dai_link->no_pcm) {
-		playback = rtd->dai_link->dpcm_playback;
-		capture = rtd->dai_link->dpcm_capture;
-	} else {
-		int stream_playback;
-		int stream_capture;
-
-		/* Adapt stream for codec2codec links */
-		if (rtd->dai_link->params) {
-			stream_playback = SNDRV_PCM_STREAM_CAPTURE;
-			stream_capture  = SNDRV_PCM_STREAM_PLAYBACK;
-		} else {
-			stream_playback = SNDRV_PCM_STREAM_PLAYBACK;
-			stream_capture  = SNDRV_PCM_STREAM_CAPTURE;
-		}
-
-		playback = 1;
-		capture = 1;
-
-		for_each_rtd_cpu_dais(rtd, i, cpu_dai) {
-			if (!snd_soc_dai_stream_valid(cpu_dai,   stream_playback))
-				playback = 0;
-			if (!snd_soc_dai_stream_valid(cpu_dai,   stream_capture))
-				capture = 0;
-		}
-
-		for_each_rtd_codec_dais(rtd, i, codec_dai) {
-			if (!snd_soc_dai_stream_valid(codec_dai, SNDRV_PCM_STREAM_PLAYBACK))
-				playback = 0;
-			if (!snd_soc_dai_stream_valid(codec_dai, SNDRV_PCM_STREAM_CAPTURE))
-				capture = 0;
-		}
-	}
-
-	if (rtd->dai_link->playback_only) {
-		playback = 1;
-		capture = 0;
-	}
-
-	if (rtd->dai_link->capture_only) {
-		playback = 0;
-		capture = 1;
-	}
+	soc_get_playback_capture(rtd, &playback, &capture);
 
 	/* create the PCM */
 	if (rtd->dai_link->params) {
